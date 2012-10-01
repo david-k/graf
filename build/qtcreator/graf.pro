@@ -45,6 +45,6 @@ QMAKE_CXXFLAGS_DEBUG += -std=c++0x -Wall
 unix:LIBS += /usr/lib/librt.so
 
 SOURCES += \
-    ../../main.cpp
+    ../../test/main.cpp
 
 
