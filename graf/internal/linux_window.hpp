@@ -1,0 +1,180 @@
+/**************************************************************************************************
+ * graf library                                                                                   *
+ * Copyright © 2012 David Kretzmer                                                                *
+ *                                                                                                *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software  *
+ * and associated documentation files (the "Software"), to deal in the Software without           *
+ * restriction,including without limitation the rights to use, copy, modify, merge, publish,      *
+ * distribute,sublicense, and/or sell copies of the Software, and to permit persons to whom the   *
+ * Software is furnished to do so, subject to the following conditions:                           *
+ *                                                                                                *
+ * The above copyright notice and this permission notice shall be included in all copies or       *
+ * substantial portions of the Software.                                                          *
+ *                                                                                                *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING  *
+ * BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND     *
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,   *
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, *
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.        *
+ *                                                                                                *
+ *************************************************************************************************/
+
+#pragma once
+
+#include "graf/graf.hpp"
+
+#ifdef LIGHT_PLATFORM_LINUX
+
+#include "light/diagnostics/errors.hpp"
+#include "light/utility/non_copyable.hpp"
+
+#include <X11/Xlib.h>
+
+
+namespace graf
+{
+namespace internal
+{
+	//=============================================================================================
+	// The X Window System has a client-server architecture. The Display represents the connection
+	// between the client (the application) and the X Server. Only the X Server has access to the
+	// drawing area and the input channel. Clients can send requests (like creating a window,
+	// drawing a line) to the X Server over a communication channel that uses the X Protocol. The
+	// X Protocol itself is send via TCP/IP or any other protocol that is available between server
+	// and client.
+	// A set of screens for a single user with one keyboard and one pointer (usually a mouse) is
+	// called a display.
+	//
+	// See: http://www.sbin.org/doc/Xlib/
+	//=============================================================================================
+	struct scoped_display : light::non_copyable
+	{
+		scoped_display() :
+			// Open connection to the X-server. Since display_name = nullptr, this call connects
+		    // to the display specified in the environment variable DISPLAY.
+			m_display(XOpenDisplay(nullptr))
+		{
+			if(!m_display)
+				throw light::runtime_error("Cannot open display");
+		}
+
+		~scoped_display()
+		{
+			// Closes the connection to the X server and releases all resources (Windows, Cursors etc.)
+			int result_xclosedisplay = XCloseDisplay(m_display);
+			assert(result_xclosedisplay == 0);
+		}
+
+		// "A large structure that contains information about the server and its screens."
+		::Display *m_display;
+	};
+
+
+	//=============================================================================================
+	//
+	//=============================================================================================
+    class window_impl : light::non_copyable
+    {
+    public:
+		// Constructor
+		window_impl(uint width, uint height) :
+			m_display(),
+			m_screen(DefaultScreen(display())), // Get the default screen
+			m_screen_width(DisplayWidth(display(), m_screen)),
+			m_screen_height(DisplayHeight(display(), m_screen)),
+			m_window(XCreateSimpleWindow(           // See http://static.cray-cyber.org/Documentation/NEC_SX_R10_1/G1AE02E/CHAP3.HTML
+				display(),                          // X Server connection
+				RootWindow(display(), m_screen),    // The parent window
+				0, 0,                               // Position of the top-left corner
+				width, height,                      // Hmmm...
+				1, BlackPixel(display(), m_screen), // Width and color of the border (Has no effect (on my PC anyway))
+				BlackPixel(display(), m_screen))    // Background color
+			)
+		{
+			// Select the event types we want to receive
+			XSelectInput(display(), m_window,
+			             ExposureMask |      // "Selects Expose events, which occur when the window is first displayed
+			                                 // and whenever it becomes visible after being obscured. Expose events
+			                                 // signal that the application should redraw itself."
+			             KeyPressMask |      // Events for pressing...
+			             KeyReleaseMask |    // ...and releasing keys
+			             ButtonPressMask |   // Events for pressing...
+			             ButtonReleaseMask | // ...and releasing mouse buttons
+			             StructureNotifyMask // Selects quite a few events, among others the resize event
+			);
+
+			// An Atom is the ID for a property. Properties enable you to associate arbitrary data with a window.
+			// Here we query the Atom for the WM_DELETE_WINDOW property defined by the window manager
+			atom_delete_window = XInternAtom(display(), "WM_DELETE_WINDOW", True);
+			// Tells the window manager to send us a message if the user has closed the window
+			XSetWMProtocols(display(), m_window, &atom_delete_window, 1);
+
+			// Displays the window
+			XMapWindow(display(), m_window);
+
+			// Flushes the ouput buffer (because X is network based it buffers the client's
+			// requests for performance reasons, but in this case we want to be sure that the
+			// window is mapped).
+			XFlush(display());
+		}
+
+		// Destructor
+		~window_impl()
+		{
+			// Not really necessary (all windows get destroyd when the connection is closed)
+			// but I do it anyway.
+			XDestroyWindow(display(), m_window);
+		}
+
+		// Processes events like keyboard input, mouse input and window resizing.
+		// Returns false if the user has closed the window.
+		bool process_events()
+		{
+			// XNextEvent gets the next event or blocks if the queue is empty. Since we want XNextEvent
+			// to return immediately, we call it only if there are events waiting. To get the number
+			// of events currently in the queue, we call XPending. If there are no more events, XPending
+			// flushes the output buffer and returns the number of events in the queue.
+			while(XPending(display()))
+			{
+				XEvent event;
+				XNextEvent(display(), &event);
+
+				// Process event
+				switch(event.type)
+				{
+					case ClientMessage:
+						// If the window mamager has send us a WM_DELETE_WINDOW property tell the user
+						// we are finished here.
+						if(static_cast<Atom>(event.xclient.data.l[0]) == atom_delete_window)
+							return false;
+					break;
+				}
+
+			} // loop: while
+
+			return true;
+		}
+
+		// Get screen dimension
+		uint screen_width() const { return m_screen_width; }
+		uint screen_height() const { return m_screen_height; }
+
+		// Internal
+		::Display* display() { return m_display.m_display; }
+
+	private:
+		scoped_display m_display;
+		// A display can have several screens. m_screen stores the ID of the screen we are drawing to
+		int m_screen;
+		// The dimension of the screen hold by m_screen
+		uint m_screen_width, m_screen_height;
+		// The window resource ID
+		Window m_window;
+		Atom atom_delete_window;
+    };
+
+} // namespace: internal
+} // namespace: graf
+
+
+#endif // conditional compilation: LIGHT_PLATFORM_LINUX

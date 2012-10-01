@@ -42,9 +42,15 @@ QMAKE_CXXFLAGS_RELEASE += -std=c++0x -Wall #-S -masm=intel
 QMAKE_CXXFLAGS_DEBUG += -std=c++0x -Wall
 
 # Libs
-unix:LIBS += /usr/lib/librt.so
+unix:LIBS += -L/usr/lib
+unix:LIBS += -lrt
+unix:LIBS += -lX11
 
 SOURCES += \
     ../../test/main.cpp
+
+HEADERS += \
+    ../../graf/internal/linux_window.hpp \
+    ../../graf/graf.hpp
 
 

@@ -16,6 +16,8 @@
 #include "light/chrono/hires_clock.hpp"
 #include "light/chrono/stopwatch.hpp"
 
+#include "graf/internal/linux_window.hpp"
+
 #include <iostream>
 
 
@@ -47,29 +49,19 @@ namespace red
 
 int main()
 {
+	using namespace graf;
+
     g_info.add_target(&std_out);
     LIGHT_LOG_INFO("G'day\n");
 
-	red::static_matrix<red::vector2f, 2> ma, mb;
-	ma[0] = {2.2, 3.3};
-	ma[1] = {342.2, 54.2};
-	auto c = ma + mb;
+	internal::window_impl window(800, 600);
 
-	enum { rows = RED_ROWS(ma), columns = RED_COLUMNS(ma) };
+	std::cout << str_printf("width: {}\nheight: {}", window.screen_width(), window.screen_height()) << std::endl;
 
-	red::vector2f vec(2.0f, 3.43f);
-	red::vector2f b = vec + vec;
+	while(window.process_events())
+	{
 
-	red::dynamic_vector<float> dvec(4);
-	dvec[0] = 1.2f;
-	dvec[1] = 2.3f;
-	dvec[2] = 3.4f;
-	dvec[3] = 4.5f;
-
-	enum { size = RED_DIMENSION(vec) };
-
-    std::cout << str_printf("vec = ({.2})\nlength(b) = {}", vec, red::length(b)) << std::endl;
-    std::cout << str_printf("mat = {.2}", c) << std::endl;
+	}
 
 	return 0;
 }
