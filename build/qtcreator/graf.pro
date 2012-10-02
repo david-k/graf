@@ -47,10 +47,13 @@ unix:LIBS += -lrt
 unix:LIBS += -lX11
 
 SOURCES += \
-    ../../test/main.cpp
+    ../../test/main.cpp \
+    ../../graf/internal/windows_opengl_context.cpp
 
 HEADERS += \
     ../../graf/internal/linux_window.hpp \
-    ../../graf/graf.hpp
+    ../../graf/graf.hpp \
+    ../../graf/opengl_context.hpp \
+    ../../graf/internal/linux_opengl_context.hpp
 
 

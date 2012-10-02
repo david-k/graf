@@ -100,7 +100,7 @@ namespace internal
 			             KeyReleaseMask |    // ...and releasing keys
 			             ButtonPressMask |   // Events for pressing...
 			             ButtonReleaseMask | // ...and releasing mouse buttons
-			             StructureNotifyMask // Selects quite a few events, among others the resize event
+			             StructureNotifyMask // Selects quite a few events, amongst others the resize event
 			);
 
 			// An Atom is the ID for a property. Properties enable you to associate arbitrary data with a window.
