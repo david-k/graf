@@ -54,7 +54,7 @@ namespace internal
 	public:
 		x_screen() :
 			// Open connection to the X-server. Since display_name = nullptr, this call connects
-		    // to the display specified in the environment variable DISPLAY.
+			// to the display specified in the environment variable DISPLAY.
 			m_display(XOpenDisplay(nullptr)),
 			// Get the default screen
 			m_screen(DefaultScreen(display())),
@@ -126,21 +126,27 @@ namespace internal
 
 		// Just take the first configuration available. For the future: do something more
 		// impressive (like choosing the *best* configuration...).
-		GLXFBConfig *config = configs[0];
+		GLXFBConfig config = configs[0];
 
 		// This only deletes the list, not the entries
 		XFree(configs);
 
-		...
+		// Gets the visual associated with 'config'
+		XVisualInfo *info = glXGetVisualFromFBConfig(display, config);
+
+		if(!info)
+			throw runtime_exception("Cannot get visual info from config");
+
+		return info;
 	}
 
 
 	//=============================================================================================
 	//
 	//=============================================================================================
-    class window_impl : light::non_copyable
-    {
-    public:
+	class window_impl : light::non_copyable
+	{
+	public:
 		// Constructor
 		window_impl(uint width, uint height, uint depth) :
 			m_screen()
@@ -232,7 +238,7 @@ namespace internal
 		// Convenience getter
 		::Display* display() { return m_screen.display(); }
 		int screen() { return m_screen.screen(); }
-    };
+	};
 
 } // namespace: internal
 } // namespace: graf
