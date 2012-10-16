@@ -38,7 +38,7 @@ namespace graf
 namespace internal
 {
 	//=============================================================================================
-	// A custom deleter for XLib resources that are freed vire XFree()
+	// A custom deleter for XLib resources that are freed via XFree()
 	//=============================================================================================
 	struct xlib_deleter
 	{
