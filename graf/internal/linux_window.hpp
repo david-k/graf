@@ -27,8 +27,10 @@
 
 #include "light/diagnostics/errors.hpp"
 #include "light/utility/non_copyable.hpp"
+#include "light/string/string.hpp"
 
 #include <X11/Xlib.h>
+#include <GL/glx.h>
 
 
 namespace graf
@@ -47,27 +49,90 @@ namespace internal
 	//
 	// See: http://www.sbin.org/doc/Xlib/
 	//=============================================================================================
-	struct scoped_display : light::non_copyable
+	class x_screen : light::non_copyable
 	{
-		scoped_display() :
+	public:
+		x_screen() :
 			// Open connection to the X-server. Since display_name = nullptr, this call connects
 		    // to the display specified in the environment variable DISPLAY.
-			m_display(XOpenDisplay(nullptr))
+			m_display(XOpenDisplay(nullptr)),
+			// Get the default screen
+			m_screen(DefaultScreen(display())),
+			// Get screen dimension
+			m_width(DisplayWidth(display(), screen())),
+			m_height(DisplayHeight(display(), screen())),
 		{
-			if(!m_display)
+			if(!display())
 				throw light::runtime_error("Cannot open display");
 		}
 
-		~scoped_display()
+		~x_screen()
 		{
 			// Closes the connection to the X server and releases all resources (Windows, Cursors etc.)
-			int result_xclosedisplay = XCloseDisplay(m_display);
-			assert(result_xclosedisplay == 0);
+			XCloseDisplay(display());
 		}
 
+		uint width() const { return m_width; }
+		uint height() const { return m_height; }
+
+		::Display* display() { return m_display; }
+		int screen() { return m_screen; }
+
+	private:
 		// "A large structure that contains information about the server and its screens."
 		::Display *m_display;
+		// A display can have several screens. m_screen stores the ID of the screen we are drawing to
+		int m_screen;
+		// The dimension of the screen hold by m_screen
+		uint m_width, m_height;
 	};
+
+
+	//=============================================================================================
+	//
+	//=============================================================================================
+	::XVisualInfo get_visual_info(::Display *display, int screen,
+	                              uint depth_size, uint stencil_size)
+	{
+		// Holds the attributes we want our display+graphics card to have
+		// See http://www.opengl.org/sdk/docs/man/xhtml/glXChooseFBConfig.xml
+		int attributes[] =
+		{
+			GLX_X_RENDERABLE, True,            // Considers only framebuffer configs with an associated X visual
+			                                   // (otherwise we wouldn't be able to render to the fb)
+			GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT, // Specifies which GLX drawable types we want. Valid bits areGLX_WINDOW_BIT,
+			                                   // GLX_PIXMAP_BIT, and GLX_PBUFFER_BIT. We only want to draw to the window.
+			GLX_RENDER_TYPE, GLX_RGBA_BIT,     // Specifies the OpenGL rendering mode we want. Valid bits are GLX_RGBA_BIT
+			                                   // and GLX_COLOR_INDEX_BIT.
+			GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR, // Use true color mode
+			GLX_RED_SIZE, 8,                   // Number...
+			GLX_GREEN_SIZE, 8,                 // ...of bits...
+			GLX_BLUE_SIZE, 8,                  // ...for each...
+			GLX_ALPHA_SIZE, 8,                 // ...color
+			GLX_DEPTH_SIZE, depth_size,        // Size of the depth buffer, in bits
+			GLX_STENCIL_SIZE, stencil_size,    // Size of the stencil buffer, in bits
+			GLX_DOUBLEBUFFER, True,            // Use doublebuffering
+			None
+		};
+
+		// The moment of truth: are the attributes we have chosen supported?
+		int num_configs = 0;
+		GLXFBConfig *configs = glXChooseFBConfig(display, screen, attributes, &num_configs);
+		if(!configs)
+			throw runtime_error(light::str_printf("Desired configuration\n\t"
+			                                          "depth: {}\n\t"
+			                                          "stencil: {}\n"
+			                                      "not supported"));
+
+		// Just take the first configuration available. For the future: do something more
+		// impressive (like choosing the *best* configuration...).
+		GLXFBConfig *config = configs[0];
+
+		// This only deletes the list, not the entries
+		XFree(configs);
+
+		...
+	}
 
 
 	//=============================================================================================
@@ -77,20 +142,20 @@ namespace internal
     {
     public:
 		// Constructor
-		window_impl(uint width, uint height) :
-			m_display(),
-			m_screen(DefaultScreen(display())), // Get the default screen
-			m_screen_width(DisplayWidth(display(), m_screen)),
-			m_screen_height(DisplayHeight(display(), m_screen)),
-			m_window(XCreateSimpleWindow(           // See http://static.cray-cyber.org/Documentation/NEC_SX_R10_1/G1AE02E/CHAP3.HTML
+		window_impl(uint width, uint height, uint depth) :
+			m_screen()
+
+		{
+			m_window = XCreateSimpleWindow(         // See http://static.cray-cyber.org/Documentation/NEC_SX_R10_1/G1AE02E/CHAP3.HTML
 				display(),                          // X Server connection
-				RootWindow(display(), m_screen),    // The parent window
+				RootWindow(display(), screen()),    // The parent window
 				0, 0,                               // Position of the top-left corner
 				width, height,                      // Hmmm...
-				1, BlackPixel(display(), m_screen), // Width and color of the border (Has no effect (on my PC anyway))
-				BlackPixel(display(), m_screen))    // Background color
-			)
-		{
+				1, BlackPixel(display(), screen()), // Width and color of the border (Has no effect (on my PC anyway))
+				BlackPixel(display(), screen())     // Background color
+			);
+
+
 			// Select the event types we want to receive
 			XSelectInput(display(), m_window,
 			             ExposureMask |      // "Selects Expose events, which occur when the window is first displayed
@@ -121,7 +186,7 @@ namespace internal
 		// Destructor
 		~window_impl()
 		{
-			// Not really necessary (all windows get destroyd when the connection is closed)
+			// Not really necessary (all windows get destroyed when the connection is closed)
 			// but I do it anyway.
 			XDestroyWindow(display(), m_window);
 		}
@@ -132,8 +197,7 @@ namespace internal
 		{
 			// XNextEvent gets the next event or blocks if the queue is empty. Since we want XNextEvent
 			// to return immediately, we call it only if there are events waiting. To get the number
-			// of events currently in the queue, we call XPending. If there are no more events, XPending
-			// flushes the output buffer and returns the number of events in the queue.
+			// of events currently in the queue, we call XPending.
 			while(XPending(display()))
 			{
 				XEvent event;
@@ -143,7 +207,7 @@ namespace internal
 				switch(event.type)
 				{
 					case ClientMessage:
-						// If the window mamager has send us a WM_DELETE_WINDOW property tell the user
+						// If the window mamager has send us a WM_DELETE_WINDOW property we will tell the user
 						// we are finished here.
 						if(static_cast<Atom>(event.xclient.data.l[0]) == atom_delete_window)
 							return false;
@@ -156,21 +220,18 @@ namespace internal
 		}
 
 		// Get screen dimension
-		uint screen_width() const { return m_screen_width; }
-		uint screen_height() const { return m_screen_height; }
-
-		// Internal
-		::Display* display() { return m_display.m_display; }
+		uint screen_width() const { return m_screen.width(); }
+		uint screen_height() const { return m_screen.height(); }
 
 	private:
-		scoped_display m_display;
-		// A display can have several screens. m_screen stores the ID of the screen we are drawing to
-		int m_screen;
-		// The dimension of the screen hold by m_screen
-		uint m_screen_width, m_screen_height;
+		x_screen m_screen;
 		// The window resource ID
 		Window m_window;
 		Atom atom_delete_window;
+
+		// Convenience getter
+		::Display* display() { return m_screen.display(); }
+		int screen() { return m_screen.screen(); }
     };
 
 } // namespace: internal
