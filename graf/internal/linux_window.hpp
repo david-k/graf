@@ -38,6 +38,18 @@ namespace graf
 namespace internal
 {
 	//=============================================================================================
+	// A custom deleter for XLib resources that are freed vire XFree()
+	//=============================================================================================
+	struct xlib_deleter
+	{
+		void operator () (void *p) { XFree(p); }
+	};
+
+	template<typename Resource>
+	using xlib_ptr = ::std::unique_ptr<Resource, xlib_deleter>;
+
+
+	//=============================================================================================
 	// The X Window System has a client-server architecture. The Display represents the connection
 	// between the client (the application) and the X Server. Only the X Server has access to the
 	// drawing area and the input channel. Clients can send requests (like creating a window,
@@ -60,7 +72,7 @@ namespace internal
 			m_screen(DefaultScreen(display())),
 			// Get screen dimension
 			m_width(DisplayWidth(display(), screen())),
-			m_height(DisplayHeight(display(), screen())),
+			m_height(DisplayHeight(display(), screen()))
 		{
 			if(!display())
 				throw light::runtime_error("Cannot open display");
@@ -91,51 +103,48 @@ namespace internal
 	//=============================================================================================
 	//
 	//=============================================================================================
-	::XVisualInfo get_visual_info(::Display *display, int screen,
+	xlib_ptr< ::XVisualInfo > get_visual_info(::Display *display, int screen,
 	                              uint depth_size, uint stencil_size)
 	{
 		// Holds the attributes we want our display+graphics card to have
 		// See http://www.opengl.org/sdk/docs/man/xhtml/glXChooseFBConfig.xml
 		int attributes[] =
 		{
-			GLX_X_RENDERABLE, True,            // Considers only framebuffer configs with an associated X visual
-			                                   // (otherwise we wouldn't be able to render to the fb)
-			GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT, // Specifies which GLX drawable types we want. Valid bits areGLX_WINDOW_BIT,
-			                                   // GLX_PIXMAP_BIT, and GLX_PBUFFER_BIT. We only want to draw to the window.
-			GLX_RENDER_TYPE, GLX_RGBA_BIT,     // Specifies the OpenGL rendering mode we want. Valid bits are GLX_RGBA_BIT
-			                                   // and GLX_COLOR_INDEX_BIT.
-			GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR, // Use true color mode
-			GLX_RED_SIZE, 8,                   // Number...
-			GLX_GREEN_SIZE, 8,                 // ...of bits...
-			GLX_BLUE_SIZE, 8,                  // ...for each...
-			GLX_ALPHA_SIZE, 8,                 // ...color
-			GLX_DEPTH_SIZE, depth_size,        // Size of the depth buffer, in bits
-			GLX_STENCIL_SIZE, stencil_size,    // Size of the stencil buffer, in bits
-			GLX_DOUBLEBUFFER, True,            // Use doublebuffering
+			GLX_X_RENDERABLE, True,              // Considers only framebuffer configs with an associated X visual
+			                                     // (otherwise we wouldn't be able to render to the fb)
+			GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,   // Specifies which GLX drawable types we want. Valid bits areGLX_WINDOW_BIT,
+			                                     // GLX_PIXMAP_BIT, and GLX_PBUFFER_BIT. We only want to draw to the window.
+			GLX_RENDER_TYPE, GLX_RGBA_BIT,       // Specifies the OpenGL rendering mode we want. Valid bits are GLX_RGBA_BIT
+			                                     // and GLX_COLOR_INDEX_BIT.
+			GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,   // Use true color mode
+			GLX_RED_SIZE, 8,                     // Number...
+			GLX_GREEN_SIZE, 8,                   // ...of bits...
+			GLX_BLUE_SIZE, 8,                    // ...for each...
+			GLX_ALPHA_SIZE, 8,                   // ...color
+			GLX_DEPTH_SIZE, int(depth_size),     // Size of the depth buffer, in bits
+			GLX_STENCIL_SIZE, int(stencil_size), // Size of the stencil buffer, in bits
+			GLX_DOUBLEBUFFER, True,              // Use doublebuffering
 			None
 		};
 
 		// The moment of truth: are the attributes we have chosen supported?
 		int num_configs = 0;
-		GLXFBConfig *configs = glXChooseFBConfig(display, screen, attributes, &num_configs);
+		xlib_ptr< ::GLXFBConfig > configs(::glXChooseFBConfig(display, screen, attributes, &num_configs));
 		if(!configs)
-			throw runtime_error(light::str_printf("Desired configuration\n\t"
-			                                          "depth: {}\n\t"
-			                                          "stencil: {}\n"
-			                                      "not supported"));
+			throw light::runtime_error(light::str_printf("Desired configuration\n\t"
+			                                                 "depth: {}\n\t"
+			                                                 "stencil: {}\n"
+			                                             "not supported"));
 
 		// Just take the first configuration available. For the future: do something more
 		// impressive (like choosing the *best* configuration...).
-		GLXFBConfig config = configs[0];
-
-		// This only deletes the list, not the entries
-		XFree(configs);
+		::GLXFBConfig config = configs.get()[0];
 
 		// Gets the visual associated with 'config'
-		XVisualInfo *info = glXGetVisualFromFBConfig(display, config);
+		xlib_ptr< ::XVisualInfo > info(::glXGetVisualFromFBConfig(display, config));
 
 		if(!info)
-			throw runtime_exception("Cannot get visual info from config");
+			throw light::runtime_error("Cannot get visual info from config");
 
 		return info;
 	}
@@ -148,22 +157,24 @@ namespace internal
 	{
 	public:
 		// Constructor
-		window_impl(uint width, uint height, uint depth) :
+		window_impl(uint width, uint height, uint depth, uint stencil) :
 			m_screen()
 
 		{
-			m_window = XCreateSimpleWindow(         // See http://static.cray-cyber.org/Documentation/NEC_SX_R10_1/G1AE02E/CHAP3.HTML
+			xlib_ptr< ::XVisualInfo > visual = get_visual_info(display(), screen(), depth, stencil);
+
+			m_window = ::XCreateSimpleWindow(       // See http://static.cray-cyber.org/Documentation/NEC_SX_R10_1/G1AE02E/CHAP3.HTML
 				display(),                          // X Server connection
 				RootWindow(display(), screen()),    // The parent window
 				0, 0,                               // Position of the top-left corner
 				width, height,                      // Hmmm...
-				1, BlackPixel(display(), screen()), // Width and color of the border (Has no effect (on my PC anyway))
+				0, BlackPixel(display(), screen()), // Width and color of the border (Has no effect (on my PC anyway))
 				BlackPixel(display(), screen())     // Background color
 			);
 
 
 			// Select the event types we want to receive
-			XSelectInput(display(), m_window,
+			::XSelectInput(display(), m_window,
 			             ExposureMask |      // "Selects Expose events, which occur when the window is first displayed
 			                                 // and whenever it becomes visible after being obscured. Expose events
 			                                 // signal that the application should redraw itself."
@@ -231,6 +242,7 @@ namespace internal
 
 	private:
 		x_screen m_screen;
+
 		// The window resource ID
 		Window m_window;
 		Atom atom_delete_window;

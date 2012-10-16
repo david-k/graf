@@ -54,7 +54,7 @@ int main()
     g_info.add_target(&std_out);
     LIGHT_LOG_INFO("G'day\n");
 
-	internal::window_impl window(800, 600);
+	internal::window_impl window(800, 600, 24, 8);
 
 	std::cout << str_printf("width: {}\nheight: {}", window.screen_width(), window.screen_height()) << std::endl;
 

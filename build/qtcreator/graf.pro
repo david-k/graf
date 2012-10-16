@@ -45,6 +45,7 @@ QMAKE_CXXFLAGS_DEBUG += -std=c++0x -Wall
 unix:LIBS += -L/usr/lib
 unix:LIBS += -lrt
 unix:LIBS += -lX11
+unix:LIBS += -lGL
 
 SOURCES += \
     ../../test/main.cpp \
