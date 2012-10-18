@@ -100,53 +100,56 @@ namespace internal
 	};
 
 
-	//=============================================================================================
-	//
-	//=============================================================================================
-	xlib_ptr< ::XVisualInfo > get_visual_info(::Display *display, int screen,
-	                              uint depth_size, uint stencil_size)
+	namespace
 	{
-		// Holds the attributes we want our display+graphics card to have
-		// See http://www.opengl.org/sdk/docs/man/xhtml/glXChooseFBConfig.xml
-		int attributes[] =
+		//=============================================================================================
+		//
+		//=============================================================================================
+		xlib_ptr< ::XVisualInfo > get_visual_info(::Display *display, int screen,
+									  uint depth_size, uint stencil_size)
 		{
-			GLX_X_RENDERABLE, True,              // Considers only framebuffer configs with an associated X visual
-			                                     // (otherwise we wouldn't be able to render to the fb)
-			GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,   // Specifies which GLX drawable types we want. Valid bits areGLX_WINDOW_BIT,
-			                                     // GLX_PIXMAP_BIT, and GLX_PBUFFER_BIT. We only want to draw to the window.
-			GLX_RENDER_TYPE, GLX_RGBA_BIT,       // Specifies the OpenGL rendering mode we want. Valid bits are GLX_RGBA_BIT
-			                                     // and GLX_COLOR_INDEX_BIT.
-			GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,   // Use true color mode
-			GLX_RED_SIZE, 8,                     // Number...
-			GLX_GREEN_SIZE, 8,                   // ...of bits...
-			GLX_BLUE_SIZE, 8,                    // ...for each...
-			GLX_ALPHA_SIZE, 8,                   // ...color
-			GLX_DEPTH_SIZE, int(depth_size),     // Size of the depth buffer, in bits
-			GLX_STENCIL_SIZE, int(stencil_size), // Size of the stencil buffer, in bits
-			GLX_DOUBLEBUFFER, True,              // Use doublebuffering
-			None
-		};
+			// Holds the attributes we want our display+graphics card to have
+			// See http://www.opengl.org/sdk/docs/man/xhtml/glXChooseFBConfig.xml
+			int attributes[] =
+			{
+				GLX_X_RENDERABLE, True,              // Considers only framebuffer configs with an associated X visual
+													 // (otherwise we wouldn't be able to render to the fb)
+				GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,   // Specifies which GLX drawable types we want. Valid bits areGLX_WINDOW_BIT,
+													 // GLX_PIXMAP_BIT, and GLX_PBUFFER_BIT. We only want to draw to the window.
+				GLX_RENDER_TYPE, GLX_RGBA_BIT,       // Specifies the OpenGL rendering mode we want. Valid bits are GLX_RGBA_BIT
+													 // and GLX_COLOR_INDEX_BIT.
+				GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,   // Use true color mode
+				GLX_RED_SIZE, 8,                     // Number...
+				GLX_GREEN_SIZE, 8,                   // ...of bits...
+				GLX_BLUE_SIZE, 8,                    // ...for each...
+				GLX_ALPHA_SIZE, 8,                   // ...color
+				GLX_DEPTH_SIZE, int(depth_size),     // Size of the depth buffer, in bits
+				GLX_STENCIL_SIZE, int(stencil_size), // Size of the stencil buffer, in bits
+				GLX_DOUBLEBUFFER, True,              // Use doublebuffering
+				None
+			};
 
-		// The moment of truth: are the attributes we have chosen supported?
-		int num_configs = 0;
-		xlib_ptr< ::GLXFBConfig > configs(::glXChooseFBConfig(display, screen, attributes, &num_configs));
-		if(!configs)
-			throw light::runtime_error(light::str_printf("Desired configuration\n\t"
-			                                                 "depth: {}\n\t"
-			                                                 "stencil: {}\n"
-			                                             "not supported"));
+			// The moment of truth: are the attributes we have chosen supported?
+			int num_configs = 0;
+			xlib_ptr< ::GLXFBConfig > configs(::glXChooseFBConfig(display, screen, attributes, &num_configs));
+			if(!configs)
+				throw light::runtime_error(light::str_printf("Desired configuration\n\t"
+																 "depth: {}\n\t"
+																 "stencil: {}\n"
+															 "not supported"));
 
-		// Just take the first configuration available. For the future: do something more
-		// impressive (like choosing the *best* configuration...).
-		::GLXFBConfig config = configs.get()[0];
+			// Just take the first configuration available. For the future: do something more
+			// impressive (like choosing the *best* configuration...).
+			::GLXFBConfig config = configs.get()[0];
 
-		// Gets the visual associated with 'config'
-		xlib_ptr< ::XVisualInfo > info(::glXGetVisualFromFBConfig(display, config));
+			// Gets the visual associated with 'config'
+			xlib_ptr< ::XVisualInfo > info(::glXGetVisualFromFBConfig(display, config));
 
-		if(!info)
-			throw light::runtime_error("Cannot get visual info from config");
+			if(!info)
+				throw light::runtime_error("Cannot get visual info from config");
 
-		return info;
+			return info;
+		}
 	}
 
 
