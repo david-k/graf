@@ -134,9 +134,9 @@ namespace internal
 			xlib_ptr< ::GLXFBConfig > configs(::glXChooseFBConfig(display, screen, attributes, &num_configs));
 			if(!configs)
 				throw light::runtime_error(light::str_printf("Desired configuration\n\t"
-																 "depth: {}\n\t"
-																 "stencil: {}\n"
-															 "not supported"));
+				                                                 "depth: {}\n\t"
+				                                                 "stencil: {}\n"
+				                                             "not supported", depth_size, stencil_size));
 
 			// Just take the first configuration available. For the future: do something more
 			// impressive (like choosing the *best* configuration...).
@@ -166,26 +166,36 @@ namespace internal
 		{
 			xlib_ptr< ::XVisualInfo > visual = get_visual_info(display(), screen(), depth, stencil);
 
-			m_window = ::XCreateSimpleWindow(       // See http://static.cray-cyber.org/Documentation/NEC_SX_R10_1/G1AE02E/CHAP3.HTML
+			// Set window attributes
+			unsigned long attr_values = CWBackPixel | CWBorderPixel | CWEventMask | CWColormap;
+			::XSetWindowAttributes attr;
+			// Background color
+			attr.background_pixel = BlackPixel(display(), screen());
+			// Border color
+			attr.border_pixel = BlackPixel(display(), screen());
+			// Select the event types we want to receive
+			attr.event_mask = ExposureMask |       // "Selects Expose events, which occur when the window is first displayed
+			                                       // and whenever it becomes visible after being obscured. Expose events
+			                                       // signal that the application should redraw itself."
+			                  KeyPressMask |       // Events for pressing...
+			                  KeyReleaseMask |     // ...and releasing keys
+			                  ButtonPressMask |    // Events for pressing...
+			                  ButtonReleaseMask |  // ...and releasing mouse buttons
+			                  StructureNotifyMask; // Selects quite a few events, amongst others the resize event
+			// Create colormap
+			attr.colormap = XCreateColormap(display(), RootWindow(display(), screen()), visual->visual, AllocNone);
+
+			// Create the window
+			m_window = ::XCreateWindow(
 				display(),                          // X Server connection
 				RootWindow(display(), screen()),    // The parent window
 				0, 0,                               // Position of the top-left corner
 				width, height,                      // Hmmm...
-				0, BlackPixel(display(), screen()), // Width and color of the border (Has no effect (on my PC anyway))
-				BlackPixel(display(), screen())     // Background color
-			);
-
-
-			// Select the event types we want to receive
-			::XSelectInput(display(), m_window,
-			             ExposureMask |      // "Selects Expose events, which occur when the window is first displayed
-			                                 // and whenever it becomes visible after being obscured. Expose events
-			                                 // signal that the application should redraw itself."
-			             KeyPressMask |      // Events for pressing...
-			             KeyReleaseMask |    // ...and releasing keys
-			             ButtonPressMask |   // Events for pressing...
-			             ButtonReleaseMask | // ...and releasing mouse buttons
-			             StructureNotifyMask // Selects quite a few events, amongst others the resize event
+				2,                                  // Width and of the border (Has no effect (on my PC anyway))
+				depth,
+				InputOutput,                        // We need a window that receives input (events) and displays output (the rendered images)
+				visual->visual,
+				attr_values, &attr
 			);
 
 			// An Atom is the ID for a property. Properties enable you to associate arbitrary data with a window.

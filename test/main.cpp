@@ -52,15 +52,23 @@ int main()
 	using namespace graf;
 
     g_info.add_target(&std_out);
+	g_error.add_target(&std_error);
     LIGHT_LOG_INFO("G'day\n");
 
-	internal::window_impl window(800, 600, 24, 8);
-
-	std::cout << str_printf("width: {}\nheight: {}", window.screen_width(), window.screen_height()) << std::endl;
-
-	while(window.process_events())
+	try
 	{
+		internal::window_impl window(800, 600, 24, 8);
 
+		std::cout << str_printf("width: {}\nheight: {}", window.screen_width(), window.screen_height()) << std::endl;
+
+		while(window.process_events())
+		{
+
+		}
+	}
+	catch(::std::exception const &e)
+	{
+		LIGHT_LOG_ERROR("Unhandled exception: {}\n", e.what());
 	}
 
 	return 0;
