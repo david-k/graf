@@ -30,6 +30,7 @@
 #include "light/string/string.hpp"
 
 #include <X11/Xlib.h>
+#include <X11/Xatom.h>
 #include <GL/glx.h>
 
 
@@ -160,7 +161,7 @@ namespace internal
 	{
 	public:
 		// Constructor
-		window_impl(uint width, uint height, uint depth, uint stencil) :
+		window_impl(utf8_unit const *_title, uint width, uint height, uint depth, uint stencil) :
 			m_screen()
 
 		{
@@ -191,7 +192,7 @@ namespace internal
 				RootWindow(display(), screen()),    // The parent window
 				0, 0,                               // Position of the top-left corner
 				width, height,                      // Hmmm...
-				2,                                  // Width and of the border (Has no effect (on my PC anyway))
+				2,                                  // Width and of the border (has no effect (on my PC anyway))
 				depth,
 				InputOutput,                        // We need a window that receives input (events) and displays output (the rendered images)
 				visual->visual,
@@ -204,6 +205,8 @@ namespace internal
 			// Tells the window manager to send us a message if the user has closed the window
 			XSetWMProtocols(display(), m_window, &atom_delete_window, 1);
 
+			title(_title);
+
 			// Displays the window
 			XMapWindow(display(), m_window);
 
@@ -211,6 +214,22 @@ namespace internal
 			// requests for performance reasons, but in this case we want to be sure that the
 			// window is mapped).
 			XFlush(display());
+		}
+
+		// Sets the title
+		void title(utf8_unit const *title)
+		{
+			XTextProperty text =
+			{
+				reinterpret_cast<unsigned char*>(const_cast<utf8_unit*>(title)),
+				XInternAtom(display(), "UTF8_STRING", False),
+				8,
+				strlen(title)
+			};
+
+			// We can't use XStoreName if we want to support UTF-8 encoded titles (and we want that. UTF-8 FTW!)
+			// XSetWMName is a shorthand for XSetTestProperty which is a shorthand for XChangeProperty
+			XSetWMName(display(), m_window, &text);
 		}
 
 		// Destructor
