@@ -19,66 +19,49 @@
  *                                                                                                *
  *************************************************************************************************/
 
-#include <graf/graf.hpp>
+#include "graf/graf.hpp"
 
-#ifdef LIGHT_PLATFORM_LINUX
-
-#include <graf/internal/linux_opengl_device.hpp>
-#include <graf/internal/linux_window.hpp>
+#include <memory>
 
 
 namespace graf
 {
-namespace internal
-{
-	//=============================================================================================
-	//
-	//=============================================================================================
-	opengl_device_impl::opengl_device_impl(window_impl *window) :
-		m_window(window)
-	{
-		typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
-
-		// Get the context creation function
-		glXCreateContextAttribsARBProc glXCreateContextAttribsARB =
-			reinterpret_cast<glXCreateContextAttribsARBProc>(glXGetProcAddress(reinterpret_cast<GLubyte const*>("glXCreateContextAttribsARB")));
-
-		// If the function doesn't exist it probaly means there is no OpenGL >= 3 available
-		if(!glXCreateContextAttribsARB)
-			throw light::runtime_error("\"glXCreateContextAttribsARB()\" not found. That probably means that OpenGL >= 3.0 is not available");
-
-		// Attributes for the new context
-		int context_attribs[] =
-		{
-			GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-			GLX_CONTEXT_MINOR_VERSION_ARB, 3,
-			None
-		};
-
-		m_context = glXCreateContextAttribsARB(m_window->display(), m_window->framebuffer_config(),
-		                                       nullptr,           // No shared context
-		                                       True,              // Enable direct rendering
-		                                       context_attribs);
-
-		XSync(m_window->display(), False);
-		check_for_errors();
-
-		glXMakeCurrent(m_window->display(), m_window->window(), m_context);
-	}
-
+	namespace internal { class window_impl; }
 
 	//=============================================================================================
 	//
 	//=============================================================================================
-	opengl_device_impl::~opengl_device_impl()
+	class window
 	{
-		glXMakeCurrent(m_window->display(), 0, 0);
-		glXDestroyContext(m_window->display(), m_context);
-	}
+	public:
+		// Constructor
+		window(utf8_unit const *_title, uint width, uint height, uint depth, uint stencil);
+
+		// Destructor
+		~window();
+
+		// Sets the title
+		void title(utf8_unit const *title);
+
+		// Processes events like keyboard input, mouse input and window resizing.
+		// Returns false if the user has closed the window.
+		bool process_events();
+
+		// Get screen dimension
+		uint screen_width();
+		uint screen_height();
+
+		// Swaps the backbuffer with the frontbuffer, so all your work becomes
+		// visible.
+		void swap_buffers();
 
 
-} // namespace: internal
+		internal::window_impl* platform_impl();
+
+	private:
+		::std::unique_ptr<internal::window_impl> m_impl;
+	};
+
 } // namespace: graf
 
 
-#endif // conditional compilation: LIGHT_PLATFORM_LINUX

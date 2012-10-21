@@ -145,9 +145,14 @@ namespace internal
 		uint screen_width() const { return m_screen.width(); }
 		uint screen_height() const { return m_screen.height(); }
 
+		// Swaps the backbuffer with the frontbuffer, so all your work becomes
+		// visible.
+		void swap_buffers();
+
 
 		::Display* display() { return m_screen.display(); }
 		int screen() { return m_screen.screen(); }
+		Window window() { return m_window; }
 		GLXFBConfig framebuffer_config() { return m_fb_config; }
 
 	private:

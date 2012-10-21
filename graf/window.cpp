@@ -19,66 +19,62 @@
  *                                                                                                *
  *************************************************************************************************/
 
-#include <graf/graf.hpp>
+#include "graf/window.hpp"
 
 #ifdef LIGHT_PLATFORM_LINUX
-
-#include <graf/internal/linux_opengl_device.hpp>
-#include <graf/internal/linux_window.hpp>
+	#include "graf/internal/linux_window.hpp"
+#else
+	#error Platform not supported yet
+#endif
 
 
 namespace graf
 {
-namespace internal
-{
 	//=============================================================================================
 	//
 	//=============================================================================================
-	opengl_device_impl::opengl_device_impl(window_impl *window) :
-		m_window(window)
+	window::window(const utf8_unit *_title, uint width, uint height, uint depth, uint stencil) :
+		m_impl(new internal::window_impl(_title, width, height, depth, stencil))
 	{
-		typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
 
-		// Get the context creation function
-		glXCreateContextAttribsARBProc glXCreateContextAttribsARB =
-			reinterpret_cast<glXCreateContextAttribsARBProc>(glXGetProcAddress(reinterpret_cast<GLubyte const*>("glXCreateContextAttribsARB")));
+	}
 
-		// If the function doesn't exist it probaly means there is no OpenGL >= 3 available
-		if(!glXCreateContextAttribsARB)
-			throw light::runtime_error("\"glXCreateContextAttribsARB()\" not found. That probably means that OpenGL >= 3.0 is not available");
+	window::~window()
+	{
 
-		// Attributes for the new context
-		int context_attribs[] =
-		{
-			GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-			GLX_CONTEXT_MINOR_VERSION_ARB, 3,
-			None
-		};
+	}
 
-		m_context = glXCreateContextAttribsARB(m_window->display(), m_window->framebuffer_config(),
-		                                       nullptr,           // No shared context
-		                                       True,              // Enable direct rendering
-		                                       context_attribs);
+	void window::title(const utf8_unit *title)
+	{
+		m_impl->title(title);
+	}
 
-		XSync(m_window->display(), False);
-		check_for_errors();
+	bool window::process_events()
+	{
+		return m_impl->process_events();
+	}
 
-		glXMakeCurrent(m_window->display(), m_window->window(), m_context);
+	void window::swap_buffers()
+	{
+		m_impl->swap_buffers();
+	}
+
+	uint window::screen_width()
+	{
+		return m_impl->screen_width();
+	}
+
+	uint window::screen_height()
+	{
+		return m_impl->screen_height();
+	}
+
+	internal::window_impl* window::platform_impl()
+	{
+		return m_impl.get();
 	}
 
 
-	//=============================================================================================
-	//
-	//=============================================================================================
-	opengl_device_impl::~opengl_device_impl()
-	{
-		glXMakeCurrent(m_window->display(), 0, 0);
-		glXDestroyContext(m_window->display(), m_context);
-	}
-
-
-} // namespace: internal
 } // namespace: graf
 
 
-#endif // conditional compilation: LIGHT_PLATFORM_LINUX

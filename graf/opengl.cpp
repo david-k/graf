@@ -19,66 +19,37 @@
  *                                                                                                *
  *************************************************************************************************/
 
-#include <graf/graf.hpp>
+#include <graf/opengl.hpp>
+#include <graf/window.hpp>
+#include <light/diagnostics/errors.hpp>
 
 #ifdef LIGHT_PLATFORM_LINUX
+	#include <graf/internal/linux_opengl_device.hpp>
+#else
+	#error Platform not supported yet
+#endif
 
-#include <graf/internal/linux_opengl_device.hpp>
-#include <graf/internal/linux_window.hpp>
+#include <GL3/gl3w.h>
 
 
 namespace graf
 {
-namespace internal
-{
-	//=============================================================================================
-	//
-	//=============================================================================================
-	opengl_device_impl::opengl_device_impl(window_impl *window) :
-		m_window(window)
-	{
-		typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
-
-		// Get the context creation function
-		glXCreateContextAttribsARBProc glXCreateContextAttribsARB =
-			reinterpret_cast<glXCreateContextAttribsARBProc>(glXGetProcAddress(reinterpret_cast<GLubyte const*>("glXCreateContextAttribsARB")));
-
-		// If the function doesn't exist it probaly means there is no OpenGL >= 3 available
-		if(!glXCreateContextAttribsARB)
-			throw light::runtime_error("\"glXCreateContextAttribsARB()\" not found. That probably means that OpenGL >= 3.0 is not available");
-
-		// Attributes for the new context
-		int context_attribs[] =
-		{
-			GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-			GLX_CONTEXT_MINOR_VERSION_ARB, 3,
-			None
-		};
-
-		m_context = glXCreateContextAttribsARB(m_window->display(), m_window->framebuffer_config(),
-		                                       nullptr,           // No shared context
-		                                       True,              // Enable direct rendering
-		                                       context_attribs);
-
-		XSync(m_window->display(), False);
-		check_for_errors();
-
-		glXMakeCurrent(m_window->display(), m_window->window(), m_context);
-	}
-
 
 	//=============================================================================================
 	//
 	//=============================================================================================
-	opengl_device_impl::~opengl_device_impl()
+	opengl_device::opengl_device(window *win) :
+		m_impl(new internal::opengl_device_impl(win->platform_impl()))
 	{
-		glXMakeCurrent(m_window->display(), 0, 0);
-		glXDestroyContext(m_window->display(), m_context);
+		if(gl3wInit())
+			throw light::runtime_error("Initializing gl3w failed");
+	}
+
+	opengl_device::~opengl_device()
+	{
+
 	}
 
 
-} // namespace: internal
 } // namespace: graf
 
-
-#endif // conditional compilation: LIGHT_PLATFORM_LINUX

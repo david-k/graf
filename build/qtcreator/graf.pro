@@ -42,21 +42,22 @@ QMAKE_CXXFLAGS_RELEASE += -std=c++0x -Wall #-S -masm=intel
 QMAKE_CXXFLAGS_DEBUG += -std=c++0x -Wall
 
 # Libs
-unix:LIBS += -L/usr/lib
-unix:LIBS += -lrt
-unix:LIBS += -lX11
-unix:LIBS += -lGL
+unix:LIBS += -L/usr/lib -lrt -lX11 -lGL -ldl
 
 SOURCES += \
     ../../test/main.cpp \
     ../../graf/internal/windows_opengl_context.cpp \
     ../../graf/internal/linux_opengl_device.cpp \
-    ../../graf/internal/linux_window.cpp
+    ../../graf/internal/linux_window.cpp \
+    ../../graf/window.cpp \
+    ../../graf/extern/gl3w/gl3w.c \
+    ../../graf/opengl.cpp
 
 HEADERS += \
     ../../graf/internal/linux_window.hpp \
     ../../graf/graf.hpp \
     ../../graf/internal/linux_opengl_device.hpp \
-    ../../graf/opengl_device.hpp
+    ../../graf/window.hpp \
+    ../../graf/opengl.hpp
 
 

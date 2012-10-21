@@ -248,6 +248,16 @@ namespace internal
 		return true;
 	}
 
+
+	//=============================================================================================
+	// Swaps the backbuffer with the frontbuffer, so all your work becomes
+	// visible.
+	//=============================================================================================
+	void window_impl::swap_buffers()
+	{
+		glXSwapBuffers(display(), m_window);
+	}
+
 } // namespace: internal
 } // namespace: graf
 

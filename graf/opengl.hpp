@@ -21,13 +21,17 @@
 
 #pragma once
 
-#include "graf/graf.hpp"
+#include <graf/graf.hpp>
 
 #include <memory>
+
+#define GL3_PROTOTYPES
+#include <GL3/gl3.h>
 
 
 namespace graf
 {
+	class window;
 	namespace internal { class opengl_device_impl; }
 
 	//=============================================================================================
@@ -38,14 +42,10 @@ namespace graf
 	public:
 		// Creates an OpenGL context for the given window with the specified
 		// number of bits for depth an stencil buffer.
-		opengl_device(uint width, uint height, uint depthBits, uint stencilBits);
+		opengl_device(window *win);
 
 		// Releases the context.
 		~opengl_device();
-
-		// Swaps the backbuffer with the frontbuffer, so all your work becomes
-		// visible.
-		void swap_buffers();
 
 	private:
 		::std::unique_ptr<internal::opengl_device_impl> m_impl;

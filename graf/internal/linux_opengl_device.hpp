@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include <GL/glx.h>
+
 
 namespace graf
 {
@@ -41,7 +43,8 @@ namespace internal
 		~opengl_device_impl();
 
 	private:
-
+		window_impl *m_window;
+		::GLXContext m_context;
 	};
 
 } // namespace: internal

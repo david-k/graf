@@ -16,8 +16,8 @@
 #include "light/chrono/hires_clock.hpp"
 #include "light/chrono/stopwatch.hpp"
 
-#include "graf/internal/linux_window.hpp"
-#include "graf/internal/linux_opengl_device.hpp"
+#include "graf/window.hpp"
+#include "graf/opengl.hpp"
 
 #include <iostream>
 
@@ -58,14 +58,17 @@ int main()
 
 	try
 	{
-		internal::window_impl window("ÖpänJüÄl", 800, 600, 24, 8);
-		internal::opengl_device_impl opengl(&window);
+		window render_win("ÖpänJüÄl", 800, 600, 24, 8);
+		opengl_device opengl(&render_win);
 
-		std::cout << str_printf("width: {}\nheight: {}", window.screen_width(), window.screen_height()) << std::endl;
+		std::cout << str_printf("width: {}\nheight: {}", render_win.screen_width(), render_win.screen_height()) << std::endl;
 
-		while(window.process_events())
+		glClearColor(0.5, 0, 0, 1);
+		while(render_win.process_events())
 		{
+			glClear(GL_COLOR_BUFFER_BIT);
 
+			render_win.swap_buffers();
 		}
 	}
 	catch(::std::exception const &e)
