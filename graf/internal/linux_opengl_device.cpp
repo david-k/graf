@@ -19,30 +19,43 @@
  *                                                                                                *
  *************************************************************************************************/
 
-#pragma once
+#include "graf/graf.hpp"
+
+#ifdef LIGHT_PLATFORM_LINUX
+
+#include "graf/internal/linux_opengl_device.hpp"
+#include "graf/internal/linux_window.hpp"
 
 
 namespace graf
 {
 namespace internal
 {
-	class window_impl;
+	//=============================================================================================
+	//
+	//=============================================================================================
+	opengl_device_impl::opengl_device_impl(window_impl *window)
+	{
+		typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
+		glXCreateContextAttribsARBProc glXCreateContextAttribsARB =
+			reinterpret_cast<glXCreateContextAttribsARBProc>(glXGetProcAddress(reinterpret_cast<GLubyte const*>("glXCreateContextAttribsARB")));
+
+		if(!glXCreateContextAttribsARB)
+			throw light::runtime_error("\"glXCreateContextAttribsARB()\" not found. That probably means that OpenGL >= 3.0 is not available");
+	}
+
 
 	//=============================================================================================
 	//
 	//=============================================================================================
-	class opengl_device_impl
+	opengl_device_impl::~opengl_device_impl()
 	{
-	public:
-		// Constructor
-		opengl_device_impl(window_impl *window);
 
-		// Destructor
-		~opengl_device_impl();
+	}
 
-	private:
-
-	};
 
 } // namespace: internal
 } // namespace: graf
+
+
+#endif // conditional compilation: LIGHT_PLATFORM_LINUX

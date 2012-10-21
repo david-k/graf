@@ -28,27 +28,27 @@
 
 namespace graf
 {
-	namespace internal { class opengl_context_impl; }
+	namespace internal { class opengl_device_impl; }
 
 	//=============================================================================================
 	//
 	//=============================================================================================
-	class opengl_context
+	class opengl_device
 	{
 	public:
 		// Creates an OpenGL context for the given window with the specified
 		// number of bits for depth an stencil buffer.
-		opengl_context(uint width, uint height, uint depthBits, uint stencilBits);
+		opengl_device(uint width, uint height, uint depthBits, uint stencilBits);
 
 		// Releases the context.
-		~opengl_context();
+		~opengl_device();
 
 		// Swaps the backbuffer with the frontbuffer, so all your work becomes
 		// visible.
 		void swap_buffers();
 
 	private:
-		::std::unique_ptr<internal::opengl_context_impl> m_impl;
+		::std::unique_ptr<internal::opengl_device_impl> m_impl;
 	};
 
 

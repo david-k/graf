@@ -17,6 +17,7 @@
 #include "light/chrono/stopwatch.hpp"
 
 #include "graf/internal/linux_window.hpp"
+#include "graf/internal/linux_opengl_device.hpp"
 
 #include <iostream>
 
@@ -58,6 +59,7 @@ int main()
 	try
 	{
 		internal::window_impl window("ÖpänJüÄl", 800, 600, 24, 8);
+		internal::opengl_device_impl opengl(&window);
 
 		std::cout << str_printf("width: {}\nheight: {}", window.screen_width(), window.screen_height()) << std::endl;
 

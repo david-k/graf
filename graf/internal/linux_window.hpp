@@ -27,10 +27,9 @@
 
 #include "light/diagnostics/errors.hpp"
 #include "light/utility/non_copyable.hpp"
-#include "light/string/string.hpp"
 
+#include <memory>
 #include <X11/Xlib.h>
-#include <X11/Xatom.h>
 #include <GL/glx.h>
 
 
@@ -48,6 +47,28 @@ namespace internal
 
 	template<typename Resource>
 	using xlib_ptr = ::std::unique_ptr<Resource, xlib_deleter>;
+
+
+	//=========================================================================================
+	// Error handling
+	// Most functions of the XLib don't return an error code because they do their work
+	// asynchronous. That's why there is a callback function that is called for every protocol
+	// error (for errors concerning the connection to the X server there is another callback
+	// function) that occurs during execution. Since we can't throw exceptions from the callback
+	// (it is called from a different module) and setjmp/longjmp don't work well with C++ (no
+	// stack-unwinding-> no destructors called) we have to introduce this disgusting global state
+	// variable that holds the error.
+	//=========================================================================================
+	extern struct xlib_error
+	{
+		enum { buffer_size = 1024 };
+
+		unsigned char code;
+		char description[buffer_size];
+	} g_error;
+
+	// Should be called after each XLib function call, but at least after each flush/sync
+	void check_for_errors();
 
 
 	//=============================================================================================
@@ -101,59 +122,6 @@ namespace internal
 	};
 
 
-	namespace
-	{
-		//=============================================================================================
-		//
-		//=============================================================================================
-		xlib_ptr< ::XVisualInfo > get_visual_info(::Display *display, int screen,
-									  uint depth_size, uint stencil_size)
-		{
-			// Holds the attributes we want our display+graphics card to have
-			// See http://www.opengl.org/sdk/docs/man/xhtml/glXChooseFBConfig.xml
-			int attributes[] =
-			{
-				GLX_X_RENDERABLE, True,              // Considers only framebuffer configs with an associated X visual
-													 // (otherwise we wouldn't be able to render to the fb)
-				GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,   // Specifies which GLX drawable types we want. Valid bits areGLX_WINDOW_BIT,
-													 // GLX_PIXMAP_BIT, and GLX_PBUFFER_BIT. We only want to draw to the window.
-				GLX_RENDER_TYPE, GLX_RGBA_BIT,       // Specifies the OpenGL rendering mode we want. Valid bits are GLX_RGBA_BIT
-													 // and GLX_COLOR_INDEX_BIT.
-				GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,   // Use true color mode
-				GLX_RED_SIZE, 8,                     // Number...
-				GLX_GREEN_SIZE, 8,                   // ...of bits...
-				GLX_BLUE_SIZE, 8,                    // ...for each...
-				GLX_ALPHA_SIZE, 8,                   // ...color
-				GLX_DEPTH_SIZE, int(depth_size),     // Size of the depth buffer, in bits
-				GLX_STENCIL_SIZE, int(stencil_size), // Size of the stencil buffer, in bits
-				GLX_DOUBLEBUFFER, True,              // Use doublebuffering
-				None
-			};
-
-			// The moment of truth: are the attributes we have chosen supported?
-			int num_configs = 0;
-			xlib_ptr< ::GLXFBConfig > configs(::glXChooseFBConfig(display, screen, attributes, &num_configs));
-			if(!configs)
-				throw light::runtime_error(light::str_printf("Desired configuration\n\t"
-				                                                 "depth: {}\n\t"
-				                                                 "stencil: {}\n"
-				                                             "not supported", depth_size, stencil_size));
-
-			// Just take the first configuration available. For the future: do something more
-			// impressive (like choosing the *best* configuration...).
-			::GLXFBConfig config = configs.get()[0];
-
-			// Gets the visual associated with 'config'
-			xlib_ptr< ::XVisualInfo > info(::glXGetVisualFromFBConfig(display, config));
-
-			if(!info)
-				throw light::runtime_error("Cannot get visual info from config");
-
-			return info;
-		}
-	}
-
-
 	//=============================================================================================
 	//
 	//=============================================================================================
@@ -161,127 +129,35 @@ namespace internal
 	{
 	public:
 		// Constructor
-		window_impl(utf8_unit const *_title, uint width, uint height, uint depth, uint stencil) :
-			m_screen()
-
-		{
-			xlib_ptr< ::XVisualInfo > visual = get_visual_info(display(), screen(), depth, stencil);
-
-			// Set window attributes
-			unsigned long attr_values = CWBackPixel | CWBorderPixel | CWEventMask | CWColormap;
-			::XSetWindowAttributes attr;
-			// Background color
-			attr.background_pixel = BlackPixel(display(), screen());
-			// Border color
-			attr.border_pixel = BlackPixel(display(), screen());
-			// Select the event types we want to receive
-			attr.event_mask = ExposureMask |       // "Selects Expose events, which occur when the window is first displayed
-			                                       // and whenever it becomes visible after being obscured. Expose events
-			                                       // signal that the application should redraw itself."
-			                  KeyPressMask |       // Events for pressing...
-			                  KeyReleaseMask |     // ...and releasing keys
-			                  ButtonPressMask |    // Events for pressing...
-			                  ButtonReleaseMask |  // ...and releasing mouse buttons
-			                  StructureNotifyMask; // Selects quite a few events, amongst others the resize event
-			// Create colormap
-			attr.colormap = XCreateColormap(display(), RootWindow(display(), screen()), visual->visual, AllocNone);
-
-			// Create the window
-			m_window = ::XCreateWindow(
-				display(),                          // X Server connection
-				RootWindow(display(), screen()),    // The parent window
-				0, 0,                               // Position of the top-left corner
-				width, height,                      // Hmmm...
-				2,                                  // Width and of the border (has no effect (on my PC anyway))
-				depth,
-				InputOutput,                        // We need a window that receives input (events) and displays output (the rendered images)
-				visual->visual,
-				attr_values, &attr
-			);
-
-			// An Atom is the ID for a property. Properties enable you to associate arbitrary data with a window.
-			// Here we query the Atom for the WM_DELETE_WINDOW property defined by the window manager
-			atom_delete_window = XInternAtom(display(), "WM_DELETE_WINDOW", True);
-			// Tells the window manager to send us a message if the user has closed the window
-			XSetWMProtocols(display(), m_window, &atom_delete_window, 1);
-
-			title(_title);
-
-			// Displays the window
-			XMapWindow(display(), m_window);
-
-			// Flushes the ouput buffer (because X is network based it buffers the client's
-			// requests for performance reasons, but in this case we want to be sure that the
-			// window is mapped).
-			XFlush(display());
-		}
+		window_impl(utf8_unit const *_title, uint width, uint height, uint depth, uint stencil);
 
 		// Sets the title
-		void title(utf8_unit const *title)
-		{
-			XTextProperty text =
-			{
-				reinterpret_cast<unsigned char*>(const_cast<utf8_unit*>(title)),
-				XInternAtom(display(), "UTF8_STRING", False),
-				8,
-				strlen(title)
-			};
-
-			// We can't use XStoreName if we want to support UTF-8 encoded titles (and we want that. UTF-8 FTW!)
-			// XSetWMName is a shorthand for XSetTestProperty which is a shorthand for XChangeProperty
-			XSetWMName(display(), m_window, &text);
-		}
+		void title(utf8_unit const *title);
 
 		// Destructor
-		~window_impl()
-		{
-			// Not really necessary (all windows get destroyed when the connection is closed)
-			// but I do it anyway.
-			XDestroyWindow(display(), m_window);
-		}
+		~window_impl();
 
 		// Processes events like keyboard input, mouse input and window resizing.
 		// Returns false if the user has closed the window.
-		bool process_events()
-		{
-			// XNextEvent gets the next event or blocks if the queue is empty. Since we want XNextEvent
-			// to return immediately, we call it only if there are events waiting. To get the number
-			// of events currently in the queue, we call XPending.
-			while(XPending(display()))
-			{
-				XEvent event;
-				XNextEvent(display(), &event);
-
-				// Process event
-				switch(event.type)
-				{
-					case ClientMessage:
-						// If the window mamager has send us a WM_DELETE_WINDOW property we will tell the user
-						// we are finished here.
-						if(static_cast<Atom>(event.xclient.data.l[0]) == atom_delete_window)
-							return false;
-					break;
-				}
-
-			} // loop: while
-
-			return true;
-		}
+		bool process_events();
 
 		// Get screen dimension
 		uint screen_width() const { return m_screen.width(); }
 		uint screen_height() const { return m_screen.height(); }
+
+
+		::Display* display() { return m_screen.display(); }
+		int screen() { return m_screen.screen(); }
+		GLXFBConfig framebuffer_config() { return m_fb_config; }
 
 	private:
 		x_screen m_screen;
 
 		// The window resource ID
 		Window m_window;
-		Atom atom_delete_window;
+		Atom m_atom_delete_window;
 
-		// Convenience getter
-		::Display* display() { return m_screen.display(); }
-		int screen() { return m_screen.screen(); }
+		GLXFBConfig m_fb_config;
 	};
 
 } // namespace: internal

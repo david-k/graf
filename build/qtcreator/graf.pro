@@ -49,12 +49,14 @@ unix:LIBS += -lGL
 
 SOURCES += \
     ../../test/main.cpp \
-    ../../graf/internal/windows_opengl_context.cpp
+    ../../graf/internal/windows_opengl_context.cpp \
+    ../../graf/internal/linux_opengl_device.cpp \
+    ../../graf/internal/linux_window.cpp
 
 HEADERS += \
     ../../graf/internal/linux_window.hpp \
     ../../graf/graf.hpp \
-    ../../graf/opengl_context.hpp \
-    ../../graf/internal/linux_opengl_device.hpp
+    ../../graf/internal/linux_opengl_device.hpp \
+    ../../graf/opengl_device.hpp
 
 
