@@ -19,42 +19,18 @@
  *                                                                                                *
  *************************************************************************************************/
 
-#include <graf/opengl.hpp>
-#include <graf/window.hpp>
-#include <graf/logger.hpp>
+#pragma once
 
-#ifdef LIGHT_PLATFORM_LINUX
-	#include <graf/internal/linux_opengl_device.hpp>
-#else
-	#error Platform not supported yet
-#endif
+#include <graf/graf.hpp>
+#include <light/diagnostics/logging.hpp>
+#include <light/diagnostics/errors.hpp>
 
-#include <GL3/gl3w.h>
 
+#define GRAF_INFO_MSG LIGHT_LOG_INFO
+#define GRAF_ERROR_MSG LIGHT_LOG_ERROR
 
 namespace graf
 {
 
-	//=============================================================================================
-	//
-	//=============================================================================================
-	opengl_device::opengl_device(window *win) :
-		m_impl(new internal::opengl_device_impl(win->platform_impl()))
-	{
-		if(gl3wInit())
-			throw light::runtime_error("Initializing gl3w failed");
-
-		int major, minor;
-		glGetIntegerv(GL_MAJOR_VERSION, &major);
-		glGetIntegerv(GL_MINOR_VERSION, &minor);
-		GRAF_INFO_MSG("OpenGL {}.{} context created\n", major, minor);
-	}
-
-	opengl_device::~opengl_device()
-	{
-
-	}
-
 
 } // namespace: graf
-

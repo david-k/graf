@@ -58,6 +58,7 @@ HEADERS += \
     ../../graf/graf.hpp \
     ../../graf/internal/linux_opengl_device.hpp \
     ../../graf/window.hpp \
-    ../../graf/opengl.hpp
+    ../../graf/opengl.hpp \
+    ../../graf/logger.hpp
 
 

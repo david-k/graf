@@ -25,7 +25,7 @@
 
 #ifdef LIGHT_PLATFORM_LINUX
 
-#include "light/diagnostics/errors.hpp"
+#include <graf/logger.hpp>
 #include "light/utility/non_copyable.hpp"
 
 #include <memory>

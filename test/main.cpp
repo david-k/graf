@@ -18,6 +18,7 @@
 
 #include "graf/window.hpp"
 #include "graf/opengl.hpp"
+#include "graf/logger.hpp"
 
 #include <iostream>
 
@@ -73,7 +74,7 @@ int main()
 	}
 	catch(::std::exception const &e)
 	{
-		LIGHT_LOG_ERROR("Unhandled exception: {}\n", e.what());
+		GRAF_ERROR_MSG("Unhandled exception: {}\n", e.what());
 	}
 
 	return 0;
