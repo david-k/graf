@@ -31,19 +31,14 @@ namespace red
 			 typename light::enable_if<is_vector<Vector>::value, int>::type = 0>
 	Writer write_to(Writer writer, Vector const &vec, char const *fmt = "{}")
 	{
-		auto const *begin = &vec[0];
-		auto const *end = begin + RED_DIMENSION(vec);
-		//enum { test = RED_DIMENSION(vec) };
-		return light::print_range(writer, begin, end, ", ", fmt);
+		return light::print_range(writer, vec.cbegin(), vec.cend(), ", ", fmt);
     }
 
 	template<typename Writer, typename Matrix,
 			 typename light::enable_if<is_matrix<Matrix>::value, int>::type = 0>
 	Writer write_to(Writer writer, Matrix const &mat, char const *fmt = "{}")
 	{
-		auto const *begin = &mat[0];
-		auto const *end = begin + RED_COLUMNS(mat);
-		return light::print_range(writer, begin, end, "\n", fmt);
+		return light::print_range(writer, mat.cbegin(), mat.cend(), "\n", fmt);
 	}
 }
 
@@ -56,6 +51,16 @@ int main()
     g_info.add_target(&std_out);
 	g_error.add_target(&std_error);
     LIGHT_LOG_INFO("G'day\n");
+
+	red::vector3f a(2.f, 2.f, 2.f);
+	red::vector3f b(2.f, 2.f, 2.f);
+	auto c = red::cross(a, b);
+
+	red::matrix4x4f mat;
+	for(auto &col: mat)
+		col = 2.333f;
+
+	std::cout << light::str_printf("{.2}\n", mat);
 
 	try
 	{

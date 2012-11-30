@@ -80,7 +80,11 @@ namespace internal
 
 
 		//=========================================================================================
+		// Returns the best framebuffer config that matches the given values, or throws an
+		// exception if none is found.
 		//
+		// TODO: to list all available video modes use XRandR
+		//       (see SDL, especially src/video/x11/SDL_x11modes.c, starting from line 610)
 		//=========================================================================================
 		::GLXFBConfig get_best_fb_config(::Display *display, int screen,
 									  uint depth_size, uint stencil_size)
@@ -91,7 +95,7 @@ namespace internal
 			{
 				GLX_X_RENDERABLE, True,              // Considers only framebuffer configs with an associated X visual
 													 // (otherwise we wouldn't be able to render to the fb)
-				GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,   // Specifies which GLX drawable types we want. Valid bits areGLX_WINDOW_BIT,
+				GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,   // Specifies which GLX drawable types we want. Valid bits are GLX_WINDOW_BIT,
 													 // GLX_PIXMAP_BIT, and GLX_PBUFFER_BIT. We only want to draw to the window.
 				GLX_RENDER_TYPE, GLX_RGBA_BIT,       // Specifies the OpenGL rendering mode we want. Valid bits are GLX_RGBA_BIT
 													 // and GLX_COLOR_INDEX_BIT.
@@ -203,15 +207,17 @@ namespace internal
 	//=============================================================================================
 	void window_impl::title(utf8_unit const *title)
 	{
+		static Atom utf8_atom = XInternAtom(display(), "UTF8_STRING", False);
+
 		XTextProperty text =
 		{
 			reinterpret_cast<unsigned char*>(const_cast<utf8_unit*>(title)),
-			XInternAtom(display(), "UTF8_STRING", False),
+			utf8_atom,
 			8,
 			strlen(title)
 		};
 
-		// We can't use XStoreName if we want to support UTF-8 encoded titles (and we want that. UTF-8 FTW!)
+		// We can't use XStoreName if we want to support UTF-8 encoded titles (and we want. UTF-8 FTW!)
 		// XSetWMName is a shorthand for XSetTestProperty which is a shorthand for XChangeProperty
 		XSetWMName(display(), m_window, &text);
 		check_for_errors();
@@ -250,7 +256,7 @@ namespace internal
 
 
 	//=============================================================================================
-	// Swaps the backbuffer with the frontbuffer, so all your work becomes
+	// Swaps the backbuffer with the frontbuffer so all your work becomes
 	// visible.
 	//=============================================================================================
 	void window_impl::swap_buffers()
