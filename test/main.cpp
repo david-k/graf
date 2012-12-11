@@ -45,6 +45,69 @@ namespace red
 }
 
 
+//=============================================================================================
+//
+//=============================================================================================
+struct chunk_wise_tag {};
+struct random_access_tag : chunk_wise_tag {};
+struct direct_access_tag : random_access_tag {};
+
+struct binary_content_tag {};
+struct text_content_tag {};
+
+struct io_result
+{
+	// Digression: The English language
+	//    - status: classification of state among several well-defined possibilities.
+	//    - state: a durable or lasting condition
+	// See http://forum.wordreference.com/showthread.php?t=287984&langid=3
+	//     http://english.stackexchange.com/questions/12958/status-vs-state
+	enum state {ok, eof, error};
+	state status;
+	size_t amount;
+};
+
+template<typename CharType, typename TraitsType = std::char_traits<CharType> >
+class string_device
+{
+public:
+	typedef CharType char_type;
+	typedef TraitsType traits_type;
+	typedef direct_access_tag category;
+	typedef text_content_tag content;
+
+	typedef std::basic_string<char_type, traits_type> string_type;
+
+	string_device(string_type *dev) :
+		m_device(dev),
+		m_pos(&m_device->front()){}
+
+	// Chunk-wise category
+	io_result read(char_type *dest, size_t size);
+	io_result write(char_type const *dest, size_t size);
+
+	// Random access category
+	size_t size() const;
+	void seek(size_t pos);
+
+	// Direct access category
+	char_type* data();
+	char_type const* data() const;
+	char_type const* cdata() const;
+
+private:
+	string_type *m_device;
+	char_type m_pos;
+};
+
+
+template<typename Device>
+void write_content(Device dev, char const *str, text_content_tag)
+{
+	dev.write
+}
+
+
 //=================================================================================================
 //
 //=================================================================================================
@@ -125,13 +188,13 @@ private:
 typedef size_t handle;
 
 template<typename TargetType>
-class handle_links
+class handle_references
 {
 public:
 	static size_t const max_entries = 1024;
 	typedef TargetType target_type;
 
-	handle_links() :
+	handle_references() :
 		m_next_index(0)
 	{
 		for(size_t entry = 0; entry < max_entries; ++entry)
@@ -244,7 +307,7 @@ public:
 	}
 
 private:
-	handle_links<spatial> m_handles;
+	handle_references<spatial> m_handles;
 	std::vector<spatial> m_entries;
 };
 
@@ -274,7 +337,7 @@ public:
 
 	}
 
-	void render(handle_links<spatial> const &spat_cat)
+	void render(handle_references<spatial> const &spat_cat)
 	{
 		for(auto const &but: m_entries)
 		{
@@ -283,7 +346,7 @@ public:
 	}
 
 private:
-	handle_links<button> m_handles;
+	handle_references<button> m_handles;
 	std::vector<button> m_entries;
 };
 
