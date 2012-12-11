@@ -14,7 +14,7 @@ set(LIBS ${LIBS} ${OPENGL_LIBRARIES})
 # Lib: light
 set(LIBS ${LIBS} "${CMAKE_SOURCE_DIR}/../light/build/liblight.a")
 
-# Linux specific
+# Lib: Linux specific
 if(UNIX)
 	# Lib: dl
 	set(LIBS ${LIBS} "dl")
