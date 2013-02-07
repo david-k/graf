@@ -14,6 +14,10 @@ set(LIBS ${LIBS} ${OPENGL_LIBRARIES})
 # Lib: light
 set(LIBS ${LIBS} "${CMAKE_SOURCE_DIR}/../light/build/liblight.a")
 
+# Lib: SFML
+set(LIBS ${LIBS} "sfml-window")
+set(LIBS ${LIBS} "sfml-graphics")
+
 # Lib: Linux specific
 if(UNIX)
 	# Lib: dl
