@@ -37,6 +37,9 @@ file(GLOB_RECURSE HEADER_FILES ${HEADER_FILES} "test/*.hpp")
 # Compiler flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x -Wall")
 
+# Release flags
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2 -S -masm=intel")
+
 # Debug mode
 if(CMAKE_BUILD_TYPE MATCHES Debug)
 	add_definitions(-D_DEBUG)

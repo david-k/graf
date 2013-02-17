@@ -15,6 +15,7 @@
 #include "light/io/mmfile.hpp"
 #include "light/chrono/hires_clock.hpp"
 #include "light/chrono/stopwatch.hpp"
+#include "light/utility/array_set.hpp"
 
 #include "graf/window.hpp"
 #include "graf/opengl.hpp"
@@ -125,118 +126,36 @@ private:
 //=================================================================================================
 //
 //=================================================================================================
-struct LastElement {};
-
-
-template<typename T, typename Set>
-T& internal_get(Set &set, std::true_type /* is wanted element */, std::false_type /* is not last element */)
-{
-	return set.m_value;
-}
-
-template<typename T, typename Set>
-T& internal_get(Set &set, std::false_type /* is not wanted element */, std::false_type /* is not last element */)
-{
-	return internal_get<T>
-	(
-		set.m_next,
-		typename std::is_same<T, typename Set::NextValueType>::type(), typename std::is_same<LastElement,
-		typename Set::Next::NextValueType>::type()
-	);
-}
-
-template<typename T, typename Set>
-T& internal_get(Set &set, std::true_type /* is wanted element */, std::true_type /* is last element */)
-{
-	return set.m_value;
-}
-
-template<typename T, typename Set>
-T& internal_get(Set &set, std::false_type /* is not wanted element */, std::true_type /* is last element */)
-{
-	static_assert(!sizeof(T), "Type not found in set");
-}
-
-
-template<typename Top, typename ...Types>
-struct TypeSet
-{
-	typedef Top ValueType;
-	ValueType m_value;
-
-	typedef typename TypeSet<Types...>::ValueType NextValueType;
-	typedef TypeSet<Types...> Next;
-	Next m_next;
-
-	template<typename T>
-	T& get()
-	{
-		return internal_get<T>(*this, typename std::is_same<T, ValueType>::type(), std::false_type());
-	}
-};
-
-template<typename Last>
-struct TypeSet<Last>
-{
-	typedef Last ValueType;
-	ValueType m_value;
-
-	typedef LastElement NextValueType;
-
-	template<typename T>
-	T& get()
-	{
-		return internal_get<T>(*this, typename std::is_same<T, ValueType>::type(), std::true_type());
-	}
-};
-
-
-template<typename TypeSet, typename Func>
-void for_each(TypeSet &set, Func f)
-{
-	for_each_impl(set, f, typename std::is_same<LastElement, typename TypeSet::Next::NextValueType>::type());
-}
-
-template<typename TypeSet, typename Func>
-void for_each_impl(TypeSet &set, Func f, std::false_type /* is not last element */)
-{
-	f(set.m_value);
-	for_each_impl(set.m_next, f, typename std::is_same<LastElement, typename TypeSet::Next::NextValueType>::type());
-}
-
-template<typename TypeSet, typename Func>
-void for_each_impl(TypeSet &set, Func f, std::true_type /* is last element */)
-{
-	f(set.m_value);
-}
-
-
-//=================================================================================================
-//
-//=================================================================================================
 
 /// The Handle class represents a persistent index to an object in an array, even if objects
 /// are added or removed.
 class Handle
 {
-public:
+	static size_t const invalid_index = static_cast<size_t>(-1);
+
+public:	
 	/// Indicates an invalid handle
-	static size_t const invalid = static_cast<size_t>(-1);
+	static Handle const invalid;
 
 	/// Constructs a new handle
-	explicit Handle(size_t index = invalid) :
+	explicit Handle(size_t index = invalid_index) :
 		m_index(index) {}
+
+	bool operator == (Handle const &rhs) const { return m_index == rhs.m_index; }
+	bool operator != (Handle const &rhs) const { return m_index != rhs.m_index; }
 
 	/// Gets the index
 	size_t index() const { return m_index; }
 	/// Sets the index
 	void index(size_t val) { m_index = val; }
 	/// Checks whether the handle is valid
-	bool is_valid() const { return m_index == invalid; }
+	bool is_valid() const { return *this != invalid; }
 
 private:
 	size_t m_index;
 };
+
+Handle const Handle::invalid = Handle(Handle::invalid_index);
 
 
 /// The HandleTranslator converts persistent handle values into array indices which
@@ -259,9 +178,8 @@ public:
 		}
 	}
 
-	/// Creates a new handle which points to the index target_index. target_index must be
-	/// an index larger as any other in the list.
-	Handle push_back(size_t target_index)
+	/// Creates a new handle which points to the index target_index
+	Handle add(size_t target_index)
 	{
 		assert(m_next_index < max_entries);
 		assert(m_entries[m_next_index].m_active == false);
@@ -271,21 +189,6 @@ public:
 
 		Handle new_handle(m_next_index);
 		m_next_index = m_entries[m_next_index].m_next_free_index;
-
-		return new_handle;
-	}
-
-	/// Like @see push_back() but without any restrictions regarding target_index.
-	Handle insert(size_t target_index)
-	{
-		auto new_handle = push_back(target_index);
-
-
-		// Update all hanbdles
-		for(size_t entry = 0; entry < max_entries; ++entry)
-		{
-			//if()
-		}
 
 		return new_handle;
 	}
@@ -334,96 +237,66 @@ private:
 };
 
 
-template<typename ...ValueTypes>
-class CompoundCatalog
+
+template<typename ...TValueTypes>
+class CatalogSet
 {
 public:
-	Handle add(ValueTypes const &...vals)
+	Handle add(TValueTypes const &...vals)
 	{
+		m_elements.add(vals...);
+		auto handle = m_handles.add(m_elements.size() - 1);
+		m_index_to_handle.push_back(handle);
 
-	}
-
-
-private:
-	TypeSet<std::vector<ValueTypes>...> m_data;
-	HandleTranslator m_handles;
-};
-
-
-template<typename TValueType>
-class ElementCatalog
-{
-public:
-	typedef TValueType ValueType;
-
-	Handle add(ValueType const &val)
-	{
-		m_elements.push_back(Entry(val));
-		auto handle = m_handles.push_back(m_elements.size() - 1);
-		m_elements.back().m_handle = handle;
+		assert(m_elements.size() == m_index_to_handle.size());
 
 		return handle;
 	}
 
-	void add(Handle pos, size_t num, ValueType const *vals, Handle *handles)
+	void add(Handle pos, size_t num, TValueTypes const *...vals, Handle *handles)
 	{
-		assert(pos.index() + num < m_elements.size());
-		assert(vals != nullptr);
+		assert(pos.index() <= m_elements.size());
+		//assert((vals != nullptr)...);
 		assert(handles != nullptr);
 
-		// TODO: Improve performance and exception safety
+		// TODO: Think about exception safeness
+		m_elements.insert(pos.index(), num, vals...);
+
 		for(size_t i = 0; i < num; i++)
 		{
-			m_elements.insert(m_elements.begin() + pos.index() + i, 1, Entry(vals[i]));
-			handles[i] = m_handles.push_back(pos.index() + i);
-			m_elements[pos.index() + i].m_handle = handles[i];
+			handles[i] = m_handles.add(pos.index() + i);
+			m_index_to_handle.insert(m_index_to_handle.begin() + pos.index() + i, handles[i]);
 		}
+
+		assert(m_elements.size() == m_index_to_handle.size());
 
 		// Update handles
 		for(size_t i = pos.index() + num; i < m_elements.size(); i++)
-			m_handles.change(m_elements[i].m_handle, i);
+			m_handles.change(m_index_to_handle[i], i);
 	}
 
-	ValueType* get(Handle index)
+	template<typename T>
+	T& get(Handle h)
 	{
-		return &m_elements[m_handles.get(index)].m_value;
+		assert(h.is_valid());
+		assert(h.index() < m_elements.size());
+
+		return m_elements.template array<T>()[h.index()];
 	}
 
-	ValueType const* get(Handle index) const
+	template<typename T>
+	T const& get(Handle h) const
 	{
-		return &m_elements[m_handles.get(index)].m_value;
+		assert(h.is_valid());
+		assert(h.index() < m_elements.size());
+
+		return m_elements.template array<T>()[h.index()];
 	}
-
-
-	ValueType& operator [] (size_t index) { return m_elements[index].m_value; }
-	ValueType const& operator [] (size_t index) const { return m_elements[index].m_value; }
 
 private:
-	struct Entry
-	{
-		Entry(ValueType const &value) :
-			m_value(value) {}
-
-		ValueType m_value;
-		Handle m_handle;
-	};
-
 	HandleTranslator m_handles;
-	::std::vector<Entry> m_elements;
-};
-
-
-template<typename ValueType>
-class range
-{
-	typedef ValueType value_type;
-
-	size_t size() { return m_end - m_begin; }
-	value_type* begin() { return m_begin; }
-	value_type* end() { return m_end; }
-
-private:
-	value_type *m_begin, *m_end;
+	light::array_set<TValueTypes...> m_elements;
+	std::vector<Handle> m_index_to_handle;
 };
 
 
@@ -456,9 +329,38 @@ struct SpatialZIndex
 class SpatialCatalog
 {
 public:
-	Handle add()
+	Handle add(Handle parent, red::vector2f const pos, red::vector2f const &bbox, light::uint4 depth = 5)
 	{
-		return Handle();
+		Handle handle;
+
+		if(parent.is_valid())
+		{
+			SpatialBase base = {Handle::invalid, parent, 0};
+			SpatialPosition spos = {pos, bbox, red::vector2f()};
+			SpatialZIndex z_index = {0, depth, 0, 0};
+
+
+			m_spatials.add(Handle(parent.index() + 1), 1, &base, &spos, &z_index, &handle);
+			get<SpatialBase>(parent).m_num_children++;
+		}
+		else
+		{
+			handle = m_spatials.add({Handle::invalid, Handle::invalid, 0}, {pos, bbox, red::vector2f()}, {0, depth, 0, 0});
+		}
+
+		return handle;
+	}
+
+	template<typename T>
+	T& get(Handle h)
+	{
+		return m_spatials.get<T>(h);
+	}
+
+	template<typename T>
+	T const& get(Handle h) const
+	{
+		return m_spatials.get<T>(h);
 	}
 
 
@@ -468,7 +370,7 @@ public:
 	}
 
 private:
-
+	CatalogSet<SpatialBase, SpatialPosition, SpatialZIndex> m_spatials;
 };
 
 
@@ -485,21 +387,16 @@ public:
 	// Gets spatial data
 	red::vector2f position() const
 	{
-		//return get_data()->m_position;
-		return red::vector2f();
+		return m_catalog.get<SpatialPosition>(m_spatial).m_position;
 	}
 	red::vector2f bounding_box() const
 	{
-		//return get_data()->m_bounding_box;
-		return red::vector2f();
+		return m_catalog.get<SpatialPosition>(m_spatial).m_bounding_box;
 	}
 
 private:
 	Handle m_spatial;
 	SpatialCatalog &m_catalog;
-
-	//struct Spatial* get_data() { return m_catalog.get(m_spatial); }
-	//struct Spatial const* get_data() const { return m_catalog.get(m_spatial); }
 };
 
 
@@ -522,6 +419,7 @@ public:
 
 		m_rects.push_back(entry(rectangle, z_index));
 	}
+
 	void display()
 	{
 		std::sort(m_rects.begin(), m_rects.end());
@@ -529,6 +427,7 @@ public:
 		for(auto &shape: m_rects)
 			m_window.draw(shape.m_shape);
 	}
+
 	void clear()
 	{
 		m_rects.clear();
@@ -559,45 +458,6 @@ private:
 //=================================================================================================
 //
 //=================================================================================================
-class widget_catalog_base
-{
-public:
-	virtual void render() = 0;
-};
-
-template<typename CatalogType>
-class widget_catalog_common
-{
-public:
-	typedef CatalogType catalog_type;
-
-	widget_catalog_common(catalog_type *catalog) :
-		m_catalog(catalog) {}
-
-	virtual void render()
-	{
-		m_catalog->render();
-	}
-
-private:
-	catalog_type *m_catalog;
-};
-
-class widget_catalog
-{
-public:
-	template<typename CatalogType>
-	explicit widget_catalog(CatalogType *catalog) :
-		m_catalog(new widget_catalog_common<CatalogType>(catalog)) {}
-
-private:
-	::std::unique_ptr<widget_catalog_base> m_catalog;
-};
-
-
-
-
-
 enum event_type
 {
 	resize = 1,
@@ -613,7 +473,7 @@ enum event_type
 	mouse_release = 1024
 };
 
-struct event_entry
+struct EventEntry
 {
 	Handle m_parent;
 	Handle m_spatial;
@@ -630,7 +490,7 @@ enum class mouse_button
 };
 
 
-class InputCatalog : public ElementCatalog<event_entry>
+class InputCatalog
 {
 public:
 	InputCatalog()
@@ -640,7 +500,7 @@ public:
 
 	void mouse_button_press(mouse_button but)
 	{
-		Handle current;
+		Handle current = Handle::invalid;
 		while(current.is_valid())
 		{
 			auto element = get(current);
@@ -650,6 +510,7 @@ public:
 	}
 
 private:
+	CatalogSet<EventEntry> m_elements;
 	Handle m_focused;
 };
 
@@ -690,14 +551,15 @@ enum ButtonState
 struct Button
 {
 	Button(Handle pos, Handle event_data) :
-		m_position(pos) {}
+		m_position(pos),
+		m_event_data(event_data) {}
 
 	Handle m_position;
 	ButtonState m_state;
 	Handle m_event_data;
 };
 
-class ButtonCatalog : public ElementCatalog<Button>
+/*class ButtonCatalog : public ElementCatalog<Button>
 {
 public:
 	ButtonCatalog(SpatialCatalog const &spatials, RectangleRenderer &renderer) :
@@ -712,11 +574,11 @@ public:
 	}
 	void render()
 	{
-		/*for(auto const &but: m_elements)
+		for(auto const &but: m_elements)
 		{
 			Spatial const *spat = m_spatials.get(but.m_position);
 			m_renderer.add(spat->m_world_position, spat->m_bounding_box, spat->m_world_z_index);
-		}*/
+		}
 	}
 
 private:
@@ -742,7 +604,7 @@ public:
 private:
 	Handle m_button;
 	ButtonCatalog &m_catalog;
-};
+};*/
 
 
 //=================================================================================================
@@ -758,7 +620,7 @@ struct window_entry
 	Handle m_event_data;
 };
 
-class WindowCatalog : public ElementCatalog<window_entry>
+/*class WindowCatalog : public ElementCatalog<window_entry>
 {
 public:
 	WindowCatalog(SpatialCatalog const &spatials, RectangleRenderer &renderer) :
@@ -773,11 +635,11 @@ public:
 	}
 	void render()
 	{
-		/*for(auto const &win: m_elements)
+		for(auto const &win: m_elements)
 		{
 			Spatial const *spat = m_spatials.get(win.m_position);
 			m_renderer.add(spat->m_world_position, spat->m_bounding_box, spat->m_world_z_index);
-		}*/
+		}
 	}
 
 private:
@@ -803,7 +665,7 @@ public:
 private:
 	Handle m_window;
 	WindowCatalog &m_catalog;
-};
+};*/
 
 
 //=================================================================================================
@@ -1022,6 +884,16 @@ void write_content(Device dev, utf8_content_tag, char const *str)
 }
 
 
+struct GenPrint
+{
+	template<typename T>
+	void operator () (T &t, char sep = ' ')
+	{
+		std::cout << t << sep << std::endl;
+	}
+};
+
+
 //=================================================================================================
 //
 //=================================================================================================
@@ -1029,9 +901,13 @@ int main()
 {
 	using namespace graf;
 
-    g_info.add_target(&std_out);
+    /*g_info.add_target(&std_out);
 	g_error.add_target(&std_error);
-    LIGHT_LOG_INFO("G'day\n");	
+    LIGHT_LOG_INFO("G'day\n");*/
+
+	SpatialCatalog spatials;
+	Handle root = spatials.add(Handle(), {0.f, 0.f}, {800.f, 600.f});
+	Handle child = spatials.add(root, {100.f, 50.f}, {300.f, 150.f});
 
 
 	/*try
@@ -1091,5 +967,3 @@ int main()
 
 	return 0;
 }
-
-
