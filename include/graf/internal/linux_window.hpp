@@ -123,7 +123,9 @@ namespace internal
 
 
 	//=============================================================================================
-	//
+	// Why not use XCB? Because GLX still depends on XLib. Actually, one could mix XCB and XLib,
+	// using XLib to initialize OpenGL and XCB for the rest, but because the only thing I need to do
+	// *is* initializing OpenGL there is no reason for using XCB.
 	//=============================================================================================
 	class window_impl : light::non_copyable
 	{
